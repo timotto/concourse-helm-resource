@@ -92,4 +92,4 @@ current_revision() {
 if [ "$(is_deployed $release)" = true ]; then
 	helm status $release | tee $target/status
 fi
-echo '{"version":{"ref":"none"}}'
+echo '{"version":{"ref":"none"}}' >&3
