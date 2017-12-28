@@ -27,32 +27,11 @@ else
   release=$(jq -r '.source.release // ""' < $payload)
 fi
 
-is_deployed() {
-  if [ -n "$1" ]; then
-    set +e
-    set +o pipefail
-    helm history --tiller-namespace $tiller_namespace $1 2>&1 | grep "DEPLOYED" > /dev/null
-    if [ $? = 0 ]; then
-      # exists
-      echo true
-    else
-      # does not exist
-      echo false
-    fi
-    set -o pipefail
-    set -e
-  else
-    echo false
-  fi
-}
-
 # Find the current revision of a helm release
 current_revision() {
   revision=`helm history --tiller-namespace $tiller_namespace $release | grep "DEPLOYED" | awk '{print $1}'`
   echo $revision
 }
 
-if [ "$(is_deployed $release)" = true ]; then
-	helm status $release | tee $target/status
-fi
+helm status $release | tee $target/status
 echo '{"version":{"ref":"none"}}' >&3
