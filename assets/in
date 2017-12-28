@@ -1,3 +1,95 @@
 #!/bin/bash
 
+set -e
+set -o pipefail
+
+exec 3>&1 # make stdout available as fd 3 for the result
+exec 1>&2 # redirect all output to stderr for logging
+
+source /opt/resource/common.sh
+
+# Read inputs
+target=$1
+payload=$(mktemp helm-resource-request.XXXXXX)
+cat > $payload <&0
+
+# Prepare
+setup_resource $payload $source
+echo "Resource setup successful."
+
+# Parse parameters
+namespace=$(jq -r '.source.namespace // "default"' < $payload)
+tiller_namespace=$(jq -r '.source.tiller_namespace // "kube-system"' < $payload)
+
+is_deployed() {
+  if [ -n "$1" ]; then
+    set +e
+    set +o pipefail
+    helm history --tiller-namespace $tiller_namespace $1 2>&1 | grep "DEPLOYED" > /dev/null
+    if [ $? = 0 ]; then
+      # exists
+      echo true
+    else
+      # does not exist
+      echo false
+    fi
+    set -o pipefail
+    set -e
+  else
+    echo false
+  fi
+}
+
+helm_install() {
+  helm_cmd="helm install"
+  helm_echo="helm install"
+  helm_cmd="$helm_cmd --namespace $namespace --tiller-namespace $tiller_namespace"
+  helm_echo="$helm_echo --namespace $namespace --tiller-namespace $tiller_namespace"
+  if [ -n "$release" ]; then
+    helm_cmd="$helm_cmd -n $release"
+    helm_echo="$helm_echo -n $release"
+  fi
+  if [ -n "$values" ]; then
+    for value in $values; do
+      helm_cmd="$helm_cmd -f $source/$value"
+      helm_echo="$helm_echo -f $source/$value"
+    done
+  fi
+  set_overriden_values
+  if [ "$replace" = true ]; then
+    helm_cmd="$helm_cmd --replace"
+    helm_echo="$helm_echo --replace"
+  fi
+  if [ "$debug" = true ]; then
+    helm_cmd="$helm_cmd --dry-run --debug"
+    helm_echo="$helm_echo --dry-run --debug"
+  fi
+  if [ "$devel" = true ]; then
+    helm_cmd="$helm_cmd --devel"
+    helm_echo="$helm_echo --devel"
+  fi
+  if [ -n "$version" ]; then
+    helm_cmd="$helm_cmd --version $version"
+    helm_echo="$helm_echo --version $version"
+  fi
+  logfile="/tmp/log"
+  mkdir -p /tmp
+  helm_cmd="$helm_cmd $chart_full | tee $logfile"
+  helm_echo="$helm_echo $chart_full | tee $logfile"
+  echo "Running command $helm_echo"
+  eval "$helm_cmd"
+
+  # Find the name of the release
+  release=`cat $logfile | grep "NAME:" | awk '{print $2}'`
+}
+
+# Find the current revision of a helm release
+current_revision() {
+  revision=`helm history --tiller-namespace $tiller_namespace $release | grep "DEPLOYED" | awk '{print $1}'`
+  echo $revision
+}
+
+if [ "$(is_deployed $release)" = true ]; then
+	helm status $release | tee $target/status
+fi
 echo '{"version":{"ref":"none"}}'
