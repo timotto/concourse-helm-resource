@@ -197,8 +197,8 @@ helm_delete() {
     exit 1
   fi
   echo "Deleting the release $release..."
-  helm_cmd="helm delete --namespace $namespace --tiller-namespace $tiller_namespace"
-  helm_echo="helm delete --namespace $namespace --tiller-namespace $tiller_namespace"
+  helm_cmd="helm delete --tiller-namespace $tiller_namespace"
+  helm_echo="helm delete --tiller-namespace $tiller_namespace"
   if [ "$debug" = true ]; then
     helm_cmd="$helm_cmd --dry-run --debug"
     helm_echo="$helm_echo --dry-run --debug"
