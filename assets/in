@@ -20,6 +20,12 @@ echo "Resource setup successful."
 # Parse parameters
 namespace=$(jq -r '.source.namespace // "default"' < $payload)
 tiller_namespace=$(jq -r '.source.tiller_namespace // "kube-system"' < $payload)
+release_file=$(jq -r '.params.release // ""' < $payload)
+if [ -n "$release_file" ]; then
+  release=`cat $source/$release_file`
+else
+  release=$(jq -r '.source.release // ""' < $payload)
+fi
 
 is_deployed() {
   if [ -n "$1" ]; then
@@ -38,49 +44,6 @@ is_deployed() {
   else
     echo false
   fi
-}
-
-helm_install() {
-  helm_cmd="helm install"
-  helm_echo="helm install"
-  helm_cmd="$helm_cmd --namespace $namespace --tiller-namespace $tiller_namespace"
-  helm_echo="$helm_echo --namespace $namespace --tiller-namespace $tiller_namespace"
-  if [ -n "$release" ]; then
-    helm_cmd="$helm_cmd -n $release"
-    helm_echo="$helm_echo -n $release"
-  fi
-  if [ -n "$values" ]; then
-    for value in $values; do
-      helm_cmd="$helm_cmd -f $source/$value"
-      helm_echo="$helm_echo -f $source/$value"
-    done
-  fi
-  set_overriden_values
-  if [ "$replace" = true ]; then
-    helm_cmd="$helm_cmd --replace"
-    helm_echo="$helm_echo --replace"
-  fi
-  if [ "$debug" = true ]; then
-    helm_cmd="$helm_cmd --dry-run --debug"
-    helm_echo="$helm_echo --dry-run --debug"
-  fi
-  if [ "$devel" = true ]; then
-    helm_cmd="$helm_cmd --devel"
-    helm_echo="$helm_echo --devel"
-  fi
-  if [ -n "$version" ]; then
-    helm_cmd="$helm_cmd --version $version"
-    helm_echo="$helm_echo --version $version"
-  fi
-  logfile="/tmp/log"
-  mkdir -p /tmp
-  helm_cmd="$helm_cmd $chart_full | tee $logfile"
-  helm_echo="$helm_echo $chart_full | tee $logfile"
-  echo "Running command $helm_echo"
-  eval "$helm_cmd"
-
-  # Find the name of the release
-  release=`cat $logfile | grep "NAME:" | awk '{print $2}'`
 }
 
 # Find the current revision of a helm release
